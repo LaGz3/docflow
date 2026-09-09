@@ -1,8 +1,10 @@
+import re
 import uuid
 from datetime import UTC, datetime
+from enum import Enum
 
-from pydantic import EmailStr
-from sqlalchemy import DateTime
+from pydantic import EmailStr, field_validator
+from sqlalchemy import DateTime, UniqueConstraint
 from sqlmodel import Field, Relationship, SQLModel
 
 
@@ -67,6 +69,96 @@ class UserPublic(UserBase):
 
 class UsersPublic(SQLModel):
     data: list[UserPublic]
+    count: int
+
+
+class OrganizationRole(str, Enum):
+    OWNER = "owner"
+    ADMIN = "admin"
+    REVIEWER = "reviewer"
+    MEMBER = "member"
+
+
+class OrganizationBase(SQLModel):
+    name: str = Field(min_length=1, max_length=255)
+    slug: str = Field(min_length=3, max_length=80)
+
+    @field_validator("slug")
+    @classmethod
+    def validate_slug(cls, value: str) -> str:
+        normalized = value.strip().lower()
+
+        if not re.fullmatch(
+            r"[a-z0-9]+(?:-[a-z0-9]+)*",
+            normalized,
+        ):
+            raise ValueError("slug只能包含小写字母、数字和连字符")
+
+        return normalized
+
+
+class OrganizationCreate(OrganizationBase):
+    pass
+
+
+class Organization(OrganizationBase, table=True):
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+    )
+    slug: str = Field(
+        min_length=3,
+        max_length=80,
+        unique=True,
+        index=True,
+    )
+    created_at: datetime = Field(
+        default_factory=get_datetime_utc,
+        sa_type=DateTime(timezone=True),
+    )
+
+
+class OrganizationMembership(SQLModel, table=True):
+    __tablename__ = "organization_membership"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "user_id",
+            name="uq_organization_membership",
+        ),
+    )
+
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+    )
+    organization_id: uuid.UUID = Field(
+        foreign_key="organization.id",
+        ondelete="CASCADE",
+        index=True,
+    )
+    user_id: uuid.UUID = Field(
+        foreign_key="user.id",
+        ondelete="CASCADE",
+        index=True,
+    )
+    role: OrganizationRole = Field(
+        default=OrganizationRole.MEMBER,
+    )
+    created_at: datetime = Field(
+        default_factory=get_datetime_utc,
+        sa_type=DateTime(timezone=True),
+    )
+
+
+class OrganizationPublic(OrganizationBase):
+    id: uuid.UUID
+    role: OrganizationRole
+    created_at: datetime
+
+
+class OrganizationsPublic(SQLModel):
+    data: list[OrganizationPublic]
     count: int
 
 
