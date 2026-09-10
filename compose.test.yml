@@ -1,0 +1,50 @@
+services:
+  test-db:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: app_test
+      POSTGRES_PASSWORD: ${TEST_POSTGRES_PASSWORD:-docflow-test-password}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d app_test"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
+  test-redis:
+    image: redis:8-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
+  backend-tests:
+    image: docflow-backend-tests:latest
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    depends_on:
+      test-db:
+        condition: service_healthy
+      test-redis:
+        condition: service_healthy
+    environment:
+      FASTAPI_ENV: development
+      PROJECT_NAME: DocFlow Tests
+      SECRET_KEY: docflow-isolated-test-secret-key
+      FIRST_SUPERUSER: admin@example.com
+      FIRST_SUPERUSER_PASSWORD: docflow-test-admin-password
+      EMAILS_FROM_EMAIL: test@example.com
+      DATABASE_URL: postgresql://postgres:${TEST_POSTGRES_PASSWORD:-docflow-test-password}@test-db:5432/app_test
+      REDIS_URL: redis://test-redis:6379/0
+    volumes:
+      - ./backend:/app/backend
+    command:
+      - bash
+      - -c
+      - |
+        alembic upgrade head
+        alembic downgrade base
+        alembic upgrade head
+        ruff check app tests
+        pytest -q --disable-warnings --tb=short

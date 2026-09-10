@@ -50,4 +50,5 @@ def downgrade():
     op.drop_table('organization_membership')
     op.drop_index(op.f('ix_organization_slug'), table_name='organization')
     op.drop_table('organization')
+    sa.Enum(name='organizationrole').drop(op.get_bind(), checkfirst=True)
     # ### end Alembic commands ###

@@ -82,7 +82,10 @@ def test_duplicate_slug_returns_409(
 
     assert first_response.status_code == 201
     assert second_response.status_code == 409
-    assert second_response.json() == {"detail": "Organization slug already exists"}
+    assert second_response.json() == {
+        "detail": "Organization slug already exists",
+        "code": "CONFLICT",
+    }
 
 
 def test_invalid_slug_returns_422(

@@ -1,8 +1,10 @@
 from fastapi import APIRouter, Depends
 from pydantic.networks import EmailStr
+from sqlmodel import select
 
-from app.api.deps import get_current_active_superuser
-from app.models import Message
+from app.api.deps import SessionDep, get_current_active_superuser
+from app.core.cache import ping as redis_ping
+from app.models import HealthStatus, Message
 from app.utils import generate_test_email, send_email
 
 router = APIRouter(prefix="/utils", tags=["utils"])
@@ -26,6 +28,12 @@ def test_email(email_to: EmailStr) -> Message:
     return Message(message="Test email sent")
 
 
-@router.get("/health-check/")
-async def health_check() -> bool:
-    return True
+@router.get("/health-check/", response_model=HealthStatus)
+def health_check(session: SessionDep) -> HealthStatus:
+    database_ok = session.exec(select(1)).one() == 1
+    redis_ok = redis_ping()
+    return HealthStatus(
+        status="ok" if database_ok and redis_ok else "degraded",
+        database=database_ok,
+        redis=redis_ok,
+    )

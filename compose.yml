@@ -31,6 +31,17 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?Variable not set}
       - POSTGRES_DB=app
 
+  redis:
+    image: redis:8-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - app-redis-data:/data
+
   adminer:
     image: adminer
     depends_on:
@@ -62,6 +73,7 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       EMAILS_FROM_EMAIL: ${EMAILS_FROM_EMAIL}
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?Variable not set}@db:5432/app
+      REDIS_URL: redis://redis:6379/0
       SENTRY_DSN: ${SENTRY_DSN:-}
 
     healthcheck:
@@ -84,5 +96,32 @@ services:
       - traefik.http.routers.backend-http.rule=Host(`${DOMAIN:-localhost}`)
       - traefik.http.routers.backend-http.entrypoints=http
 
+  worker:
+    image: backend:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+        restart: true
+      redis:
+        condition: service_healthy
+        restart: true
+    environment:
+      PROJECT_NAME: ${PROJECT_NAME:?Variable not set}
+      SECRET_KEY: ${SECRET_KEY:?Variable not set}
+      FIRST_SUPERUSER: ${FIRST_SUPERUSER:?Variable not set}
+      FIRST_SUPERUSER_PASSWORD: ${FIRST_SUPERUSER_PASSWORD:?Variable not set}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      EMAILS_FROM_EMAIL: ${EMAILS_FROM_EMAIL}
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?Variable not set}@db:5432/app
+      REDIS_URL: redis://redis:6379/0
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["python", "-m", "app.workers.notifications"]
+
 volumes:
   app-db-data:
+  app-redis-data:

@@ -27,6 +27,10 @@ services:
     ports:
       - "5432:5432"
 
+  redis:
+    ports:
+      - "6379:6379"
+
   adminer:
     ports:
       - "8080:8080"
@@ -67,6 +71,15 @@ services:
       SMTP_HOST: "mailpit"
       SMTP_PORT: "1025"
       SMTP_TLS: "false"
+
+  worker:
+    environment:
+      FASTAPI_ENV: "development"
+      SMTP_HOST: "mailpit"
+      SMTP_PORT: "1025"
+      SMTP_TLS: "false"
+    volumes:
+      - ./backend:/app/backend
 
   mailpit:
     image: axllent/mailpit

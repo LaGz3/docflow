@@ -1,88 +1,99 @@
-# Full Stack FastAPI Template
+# DocFlow
 
-[![Test Docker Compose](../../actions/workflows/test-docker-compose.yml/badge.svg)](../../actions/workflows/test-docker-compose.yml)
-[![Test Backend](../../actions/workflows/test-backend.yml/badge.svg)](../../actions/workflows/test-backend.yml)
+DocFlow is a multi-tenant document approval backend. It turns document editing,
+review, approval, notification, and auditing into one traceable workflow instead
+of a collection of disconnected CRUD endpoints.
 
-## Technology Stack and Features
+The repository is adapted from the MIT-licensed
+[Full Stack FastAPI Template](https://github.com/fastapi/full-stack-fastapi-template).
+DocFlow's domain model, organization RBAC, approval workflow, version control,
+audit trail, Redis cache, notification outbox, idempotency, and isolated test
+environment are project-specific additions.
 
-- ⚡ [**FastAPI**](https://fastapi.tiangolo.com) for the Python backend API.
-  - 🧰 [SQLModel](https://sqlmodel.tiangolo.com) for the Python SQL database interactions (ORM).
-  - 🔍 [Pydantic](https://docs.pydantic.dev), used by FastAPI, for the data validation and settings management.
-  - 💾 [PostgreSQL](https://www.postgresql.org) as the SQL database.
-- 🚀 [React](https://react.dev) for the frontend.
-  - 🧩 Built into the backend application and served by FastAPI on the same domain as the API.
-  - 💃 Using TypeScript, hooks, [Vite](https://vitejs.dev), and other parts of a modern frontend stack.
-  - 🎨 [Tailwind CSS](https://tailwindcss.com) and [shadcn/ui](https://ui.shadcn.com) for the frontend components.
-  - 🤖 An automatically generated frontend client.
-  - 🧪 [Playwright](https://playwright.dev) for end-to-end testing.
-  - 🦇 Dark mode support.
-- ☁️ [FastAPI Cloud](https://fastapicloud.com) for deployment.
-- 🐋 [Docker Compose](https://www.docker.com) for local services and self-hosted deployment.
-  - 📞 [Traefik](https://traefik.io) as a reverse proxy with automatic HTTPS.
-- 🔒 Secure password hashing by default.
-- 🔑 JWT (JSON Web Token) authentication.
-- 📫 Email-based password recovery.
-- ✉️ [React Email](https://react.email) for email templates.
-- 📬 [Mailpit](https://mailpit.axllent.org) for local email testing during development.
-- ✅ Tests with [Pytest](https://pytest.org).
-- 🏭 CI (continuous integration) and CD (continuous deployment) based on GitHub Actions.
+## Core capabilities
 
-### Dashboard Login
+- JWT authentication and secure password hashing
+- Organization-level multi-tenancy with owner/admin/reviewer/member roles
+- Document CRUD, keyword filtering, pagination, and immutable version history
+- State machine: draft -> in_review -> approved/rejected, plus withdraw/archive
+- Optimistic concurrency control through `lock_version`
+- Idempotent document creation through the `Idempotency-Key` header
+- Tenant-scoped audit logs for sensitive operations
+- Redis cache-aside reads with fail-open degradation
+- Transactional notification outbox and retrying background worker
+- PostgreSQL migrations with Alembic upgrade and downgrade verification
+- Request IDs, key-value request logs, and health checks
+- Isolated Docker test database; tests refuse to use the development database
 
-![Dashboard login screenshot](img/login.png)
+## Architecture
 
-### Dashboard - Admin
+```text
+Client
+  -> Traefik
+  -> FastAPI route (authentication + validation)
+  -> service layer (tenant permission + state transition + transaction)
+  -> PostgreSQL (business source of truth + audit + outbox)
+  -> Redis (read cache, optional/fail-open)
 
-![Admin dashboard screenshot](img/dashboard.png)
+Notification worker
+  -> claims outbox row
+  -> sends email
+  -> records success or retry state
+```
 
-### Dashboard - Items
+See [docs/architecture.md](docs/architecture.md) for the data flow, state
+transitions, consistency strategy, and interview-oriented design decisions.
 
-![Items dashboard screenshot](img/dashboard-items.png)
+## Run locally
 
-### Dashboard - Dark Mode
+1. Copy `.env.example` to `.env` and replace all placeholder secrets.
+2. Start the stack:
 
-![Dark mode dashboard screenshot](img/dashboard-dark.png)
+   ```powershell
+   docker compose up -d --build
+   ```
 
-### React Email Templates
+3. Apply migrations and bootstrap the initial administrator:
 
-![Email templates screenshot](img/react-email.png)
+   ```powershell
+   docker compose exec backend bash scripts/prestart.sh
+   ```
 
-### Mailpit - Local Email Testing
+4. Open:
 
-![Mailpit screenshot](img/mailpit.png)
+   - API documentation: <http://localhost:8000/docs>
+   - Mailpit: <http://localhost:8025>
+   - Adminer: <http://localhost:8080>
+   - Traefik dashboard: <http://localhost:8090>
 
-### Interactive API Documentation
+## Verification
 
-![API docs](img/docs.png)
+Run the backend against disposable PostgreSQL and Redis services:
 
-## How to Use It
+```powershell
+.\scripts\test-backend-isolated.ps1
+```
 
-Click the **Use this template** button at the top of this page to create a new repository.
+The script validates Alembic upgrade/downgrade reversibility, runs the backend
+test suite, then removes the disposable containers and volumes.
 
-## Backend Development
+Lint the backend:
 
-Backend docs: [backend/README.md](./backend/README.md).
+```powershell
+docker compose run --rm --no-deps backend ruff check app tests
+```
 
-## Frontend Development
+## Important API paths
 
-Frontend docs: [frontend/README.md](./frontend/README.md).
-
-## Deployment
-
-FastAPI Cloud deployment: [deployment.md](./deployment.md).
-
-Self-hosted deployment with Docker Compose: [deployment-docker-compose.md](./deployment-docker-compose.md).
-
-## Development
-
-General development docs: [development.md](./development.md).
-
-This includes the local FastAPI and Vite workflow, Docker Compose services, `.env` configuration, and more.
-
-## Release Notes
-
-Check the file [release-notes.md](./release-notes.md).
+- `POST /api/v1/login/access-token`
+- `POST /api/v1/organizations/`
+- `GET|POST /api/v1/organizations/{organization_id}/members`
+- `GET|POST /api/v1/organizations/{organization_id}/documents/`
+- `PATCH /api/v1/organizations/{organization_id}/documents/{document_id}`
+- `POST .../{document_id}/submit|approve|reject|withdraw|archive`
+- `GET /api/v1/organizations/{organization_id}/audit-logs/`
+- `GET /api/v1/utils/health-check/`
 
 ## License
 
-The Full Stack FastAPI Template is licensed under the terms of the MIT license.
+MIT. See [LICENSE](LICENSE).

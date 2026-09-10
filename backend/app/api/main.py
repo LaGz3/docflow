@@ -1,6 +1,8 @@
 from fastapi import APIRouter
 
 from app.api.routes import (
+    audit_logs,
+    documents,
     items,
     login,
     organizations,
@@ -16,6 +18,8 @@ api_router.include_router(users.router)
 api_router.include_router(utils.router)
 api_router.include_router(items.router)
 api_router.include_router(organizations.router)
+api_router.include_router(documents.router)
+api_router.include_router(audit_logs.router)
 
 
 if settings.FASTAPI_ENV == "development":

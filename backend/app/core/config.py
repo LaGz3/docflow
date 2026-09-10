@@ -5,6 +5,7 @@ from pydantic import (
     EmailStr,
     HttpUrl,
     PostgresDsn,
+    RedisDsn,
     computed_field,
     field_validator,
     model_validator,
@@ -29,6 +30,8 @@ class Settings(BaseSettings):
     PROJECT_NAME: str
     SENTRY_DSN: HttpUrl | None = None
     DATABASE_URL: PostgresDsn
+    REDIS_URL: RedisDsn | None = None
+    CACHE_TTL_SECONDS: int = 60
 
     @field_validator("DATABASE_URL", mode="before")
     @classmethod
